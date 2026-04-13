@@ -243,7 +243,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 //  ★★★ 在這裡填入你的 Supabase 資訊 ★★★
 // ================================================================
 const SUPABASE_URL = 'https://smaskjyyhkjbhyfkjvul.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_KcYjODJL69ckpJTD2QFGuQ_DnLxpISr'
+const SUPABASE_ANON_KEY = '請填入你的_eyJ開頭的_anon_key'
 // ================================================================
 
 const EMOJIS = ['💵','🏦','💳','📱','💰','🎯','🏧','💎','🪙','🏠','🚗','✈️','🍜','🍱','☕','🛒','🚌','🎮','🎬','👕','💄','📚','💻','🐾','🎁','📈','🏋️','⚽','🎵','💊','🔧','💡','📦','🌸','🍎','🛵','🎓','🧩','🪴','🐶','🐱','⛽','🧴','💅','🦷','🎨','🛁','🌍']
@@ -714,7 +714,7 @@ function openTx() {
 
 function setTT(t) {
   txT = t
-  ['tbe','tbi','tbt'].forEach(id => document.getElementById(id).className='tb')
+  var ttIds = ['tbe','tbi','tbt']; ttIds.forEach(function(id){ document.getElementById(id).className='tb' })
   const m={expense:'ae',income:'ai',transfer:'at'}, im={expense:'tbe',income:'tbi',transfer:'tbt'}
   document.getElementById(im[t]).className = 'tb ' + m[t]
   document.getElementById('tx-toac-row').style.display = t==='transfer' ? 'block' : 'none'
