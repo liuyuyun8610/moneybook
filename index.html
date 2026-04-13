@@ -190,6 +190,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
   <div class="fr"><div class="fl">帳戶</div><select class="fi" id="tx-ac"></select></div>
   <div class="fr" id="tx-toac-row" style="display:none"><div class="fl">轉入帳戶</div><select class="fi" id="tx-toac"></select></div>
+  <div class="fr" id="tx-store-row">
+    <div class="fl">店家（選填）</div>
+    <input class="fi" id="tx-store" placeholder="輸入店家名稱..." autocomplete="off" oninput="filterStores(this.value)"/>
+    <div id="store-suggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+  </div>
   <div class="fr"><div class="fl">備註</div><input class="fi" id="tn" placeholder="輸入備註..."/></div>
   <div class="fr"><div class="fl">日期</div><input class="fi" id="td" type="date"/></div>
   <button class="sbtn" id="tx-submit" onclick="saveTx()">新增</button>
@@ -243,7 +248,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 //  ★★★ 在這裡填入你的 Supabase 資訊 ★★★
 // ================================================================
 const SUPABASE_URL = 'https://smaskjyyhkjbhyfkjvul.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtYXNranl5aGtqYmh5ZmtqdnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODYxNTMsImV4cCI6MjA5MTU2MjE1M30.ZIpGpwExI6O_cY_xNgcWDeNdiRsWlw-XeUiGs7GYJ0g'
+const SUPABASE_ANON_KEY = '請填入你的_eyJ開頭的_anon_key'
 // ================================================================
 
 const EMOJIS = ['💵','🏦','💳','📱','💰','🎯','🏧','💎','🪙','🏠','🚗','✈️','🍜','🍱','☕','🛒','🚌','🎮','🎬','👕','💄','📚','💻','🐾','🎁','📈','🏋️','⚽','🎵','💊','🔧','💡','📦','🌸','🍎','🛵','🎓','🧩','🪴','🐶','🐱','⛽','🧴','💅','🦷','🎨','🛁','🌍']
@@ -525,7 +530,7 @@ function rRec() {
         const cl = catLbl(t); ico=cl.e; lbl2=cl.l
         col = t.type==='income' ? 'rgba(29,158,117,.15)' : 'rgba(216,90,48,.15)'
       }
-      html += `<div class="txi"><div class="txic" style="background:${col}">${ico}</div><div class="txin"><div class="txno">${t.note||lbl2}</div><div class="txme">${lbl2} · ${acn}</div></div><div class="txam" style="color:${t.type==='income'?'var(--inc)':'var(--exp)'}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div><button class="txdl" onclick="delTx('${t.id}')">✕</button></div>`
+      html += `<div class="txi"><div class="txic" style="background:${col}">${ico}</div><div class="txin"><div class="txno">${t.store_name||t.note||lbl2}</div><div class="txme">${t.store_name?t.store_name+' · ':''}${lbl2} · ${acn}</div></div><div class="txam" style="color:${t.type==='income'?'var(--inc)':'var(--exp)'}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div><button class="txdl" onclick="delTx('${t.id}')">✕</button></div>`
     })
     html += '</div>'
   })
@@ -709,7 +714,7 @@ function openTx() {
   document.getElementById('td').value = new Date().toISOString().split('T')[0]
   document.getElementById('ta').value = ''
   document.getElementById('tn').value = ''
-  fillAcSel(); setTT('expense'); show('m-tx')
+  fillAcSel(); setTT('expense'); show('m-tx'); initStoreField()
 }
 
 function setTT(t) {
@@ -720,6 +725,7 @@ function setTT(t) {
   document.getElementById('tx-toac-row').style.display = t==='transfer' ? 'block' : 'none'
   document.getElementById('tx-cat-row').style.display = t==='transfer' ? 'none' : 'block'
   selP=''; selS=''; rTxCat()
+  document.getElementById('tx-store-row').style.display = t==='transfer' ? 'none' : 'block'
 }
 
 function rTxCat() {
@@ -748,11 +754,14 @@ async function saveTx() {
   if (txT === 'transfer' && account_id === to_account_id) { toast('轉出和轉入帳戶不能相同'); return }
   const btn = document.getElementById('tx-submit')
   btn.disabled=true; btn.textContent='新增中...'
+  const store_name = document.getElementById('tx-store').value.trim()
+  if (store_name) saveStoreMemory(store_name)
   const payload = {
     type: txT, amount,
     parent_cat_id: txT!=='transfer' ? selP : null,
     sub_cat_id: txT!=='transfer' && selS ? selS : null,
     note: document.getElementById('tn').value.trim(),
+    store_name: store_name || null,
     account_id,
     to_account_id: txT==='transfer' ? to_account_id : null,
     date: document.getElementById('td').value,
@@ -877,6 +886,37 @@ function rEP(gid, iid, sel) {
     `<div class="ep${e===sel?' sel':''}" onclick="pkE('${gid}','${iid}','${e}')">${e}</div>`).join('')
 }
 function pkE(gid,iid,e) { document.getElementById(iid).value=e; rEP(gid,iid,e) }
+
+// ── 店家記憶 ──────────────────────────────────────────────────
+function getStoreMem() {
+  try { return JSON.parse(localStorage.getItem('mb_stores')||'[]') } catch { return [] }
+}
+function saveStoreMemory(name) {
+  if (!name) return
+  let stores = getStoreMem().filter(s => s !== name)
+  stores.unshift(name)
+  stores = stores.slice(0, 30)
+  localStorage.setItem('mb_stores', JSON.stringify(stores))
+}
+function filterStores(val) {
+  const el = document.getElementById('store-suggestions')
+  const stores = getStoreMem()
+  const filtered = val ? stores.filter(s => s.includes(val)) : stores.slice(0, 8)
+  el.innerHTML = filtered.map(s =>
+    `<button onclick="pickStore('${s.replace(/'/g,"\'")}')" style="padding:5px 12px;border-radius:20px;border:0.5px solid var(--bd);background:var(--bg3);font-size:13px;cursor:pointer;color:var(--text2)">${s}</button>`
+  ).join('')
+}
+function pickStore(name) {
+  document.getElementById('tx-store').value = name
+  filterStores(name)
+}
+function initStoreField() {
+  const el = document.getElementById('store-suggestions')
+  const stores = getStoreMem().slice(0, 8)
+  el.innerHTML = stores.map(s =>
+    `<button onclick="pickStore('${s.replace(/'/g,"\'")}')" style="padding:5px 12px;border-radius:20px;border:0.5px solid var(--bd);background:var(--bg3);font-size:13px;cursor:pointer;color:var(--text2)">${s}</button>`
+  ).join('')
+}
 
 // ── 啟動 ─────────────────────────────────────────────────────
 updML()
