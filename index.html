@@ -201,6 +201,34 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 </div>
 </div>
 
+<!-- 編輯記錄 -->
+<div class="ov" id="m-etx" onclick="bgC('m-etx',event)">
+<div class="sh" onclick="event.stopPropagation()">
+  <div class="shtit">編輯記錄<button class="shcl" onclick="hide('m-etx')">×</button></div>
+  <div class="ttog">
+    <button class="tb ae" id="etbe" onclick="setETT('expense')">支出</button>
+    <button class="tb" id="etbi" onclick="setETT('income')">收入</button>
+    <button class="tb" id="etbt" onclick="setETT('transfer')">轉帳</button>
+  </div>
+  <div class="fr"><div class="fl">金額 (TWD)</div><input class="fi" id="eta" type="number" inputmode="decimal"/></div>
+  <div class="fr" id="etx-cat-row">
+    <div class="fl">分類</div>
+    <div id="etx-cat"></div>
+  </div>
+  <div class="fr"><div class="fl">帳戶</div><select class="fi" id="etx-ac"></select></div>
+  <div class="fr" id="etx-toac-row" style="display:none"><div class="fl">轉入帳戶</div><select class="fi" id="etx-toac"></select></div>
+  <div class="fr" id="etx-store-row">
+    <div class="fl">店家（選填）</div>
+    <input class="fi" id="etx-store" placeholder="輸入店家名稱..." autocomplete="off" oninput="filterStoresE(this.value)"/>
+    <div id="estore-suggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+  </div>
+  <div class="fr"><div class="fl">備註</div><input class="fi" id="etn" placeholder="輸入備註..."/></div>
+  <div class="fr"><div class="fl">日期</div><input class="fi" id="etd" type="date"/></div>
+  <button class="sbtn" id="etx-submit" onclick="saveEditTx()">儲存變更</button>
+  <button class="sbtn danger" id="etx-del" onclick="delEditTx()">刪除記錄</button>
+</div>
+</div>
+
 <!-- 帳戶 sheet -->
 <div class="ov" id="m-ac" onclick="bgC('m-ac',event)">
 <div class="sh" onclick="event.stopPropagation()">
@@ -248,7 +276,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 //  ★★★ 在這裡填入你的 Supabase 資訊 ★★★
 // ================================================================
 const SUPABASE_URL = 'https://smaskjyyhkjbhyfkjvul.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtYXNranl5aGtqYmh5ZmtqdnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5ODYxNTMsImV4cCI6MjA5MTU2MjE1M30.ZIpGpwExI6O_cY_xNgcWDeNdiRsWlw-XeUiGs7GYJ0g'
+const SUPABASE_ANON_KEY = '請填入你的_eyJ開頭的_anon_key'
 // ================================================================
 
 const EMOJIS = ['💵','🏦','💳','📱','💰','🎯','🏧','💎','🪙','🏠','🚗','✈️','🍜','🍱','☕','🛒','🚌','🎮','🎬','👕','💄','📚','💻','🐾','🎁','📈','🏋️','⚽','🎵','💊','🔧','💡','📦','🌸','🍎','🛵','🎓','🧩','🪴','🐶','🐱','⛽','🧴','💅','🦷','🎨','🛁','🌍']
@@ -530,7 +558,7 @@ function rRec() {
         const cl = catLbl(t); ico=cl.e; lbl2=cl.l
         col = t.type==='income' ? 'rgba(29,158,117,.15)' : 'rgba(216,90,48,.15)'
       }
-      html += `<div class="txi"><div class="txic" style="background:${col}">${ico}</div><div class="txin"><div class="txno">${t.store_name||t.note||lbl2}</div><div class="txme">${t.store_name?t.store_name+' · ':''}${lbl2} · ${acn}</div></div><div class="txam" style="color:${t.type==='income'?'var(--inc)':'var(--exp)'}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div><button class="txdl" onclick="delTx('${t.id}')">✕</button></div>`
+      html += `<div class="txi" onclick="openEditTx('${t.id}')" style="cursor:pointer"><div class="txic" style="background:${col}">${ico}</div><div class="txin"><div class="txno">${t.store_name||t.note||lbl2}</div><div class="txme">${t.store_name?t.store_name+' · ':''}${lbl2} · ${acn}</div></div><div class="txam" style="color:${t.type==='income'?'var(--inc)':'var(--exp)'}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div><button class="txdl" onclick="event.stopPropagation();delTx('${t.id}')">✕</button></div>`
     })
     html += '</div>'
   })
@@ -886,6 +914,116 @@ function rEP(gid, iid, sel) {
     `<div class="ep${e===sel?' sel':''}" onclick="pkE('${gid}','${iid}','${e}')">${e}</div>`).join('')
 }
 function pkE(gid,iid,e) { document.getElementById(iid).value=e; rEP(gid,iid,e) }
+
+
+// ── 編輯交易 ──────────────────────────────────────────────────
+let editTxId = null
+let eTxT = 'expense', eSelP = '', eSelS = ''
+
+function openEditTx(id) {
+  const t = txs.find(x => x.id === id)
+  if (!t) return
+  editTxId = id
+  eTxT = t.type
+  eSelP = t.parent_cat_id || ''
+  eSelS = t.sub_cat_id || ''
+
+  const acOpts = acs.map(a => `<option value="${a.id}">${a.emoji} ${a.name}</option>`).join('')
+  document.getElementById('etx-ac').innerHTML = acOpts
+  document.getElementById('etx-toac').innerHTML = acOpts
+
+  document.getElementById('eta').value = t.amount
+  document.getElementById('etn').value = t.note || ''
+  document.getElementById('etx-store').value = t.store_name || ''
+  document.getElementById('etd').value = t.date
+
+  if (t.account_id) document.getElementById('etx-ac').value = t.account_id
+  if (t.to_account_id) document.getElementById('etx-toac').value = t.to_account_id
+
+  setETT(t.type)
+  filterStoresE('')
+  show('m-etx')
+}
+
+function setETT(t) {
+  eTxT = t
+  var ids = ['etbe','etbi','etbt']; ids.forEach(function(id){ document.getElementById(id).className='tb' })
+  const m={expense:'ae',income:'ai',transfer:'at'}, im={expense:'etbe',income:'etbi',transfer:'etbt'}
+  document.getElementById(im[t]).className = 'tb ' + m[t]
+  document.getElementById('etx-toac-row').style.display = t==='transfer' ? 'block' : 'none'
+  document.getElementById('etx-cat-row').style.display = t==='transfer' ? 'none' : 'block'
+  document.getElementById('etx-store-row').style.display = t==='transfer' ? 'none' : 'block'
+  rETxCat()
+}
+
+function rETxCat() {
+  const el = document.getElementById('etx-cat')
+  const parents = gParents(eTxT)
+  if (!parents.length) { el.innerHTML=''; return }
+  if (!eSelP || !parents.find(c=>c.id===eSelP)) eSelP = parents[0].id
+  const par = parents.find(c=>c.id===eSelP)
+  const subs = gSubs(eTxT, eSelP)
+  let html = `<div class="pcats">${parents.map(p=>`<button class="pcb${eSelP===p.id?' sel':''}" onclick="eSelPar('${p.id}')">${p.emoji}<span>${p.name}</span></button>`).join('')}</div>`
+  if (subs.length) {
+    html += `<div class="subrow">${subs.map(s=>`<button class="spill${eSelS===s.id?' sel':''}" onclick="eSelSub('${s.id}')">${s.emoji||par.emoji} ${s.name}</button>`).join('')}<button class="spill${eSelS===''?' sel':''}" onclick="eSelSub('')" style="color:var(--text3)">不選子分類</button></div>`
+  }
+  el.innerHTML = html
+}
+
+function eSelPar(pid) { eSelP=pid; eSelS=''; rETxCat() }
+function eSelSub(sid) { eSelS=sid; rETxCat() }
+
+function filterStoresE(val) {
+  const el = document.getElementById('estore-suggestions')
+  const stores = getStoreMem()
+  const filtered = val ? stores.filter(s => s.includes(val)) : stores.slice(0, 8)
+  el.innerHTML = filtered.map(s =>
+    `<button onclick="pickStoreE('${s.replace(/'/g,"\'")}')" style="padding:5px 12px;border-radius:20px;border:0.5px solid var(--bd);background:var(--bg3);font-size:13px;cursor:pointer;color:var(--text2)">${s}</button>`
+  ).join('')
+}
+
+function pickStoreE(name) {
+  document.getElementById('etx-store').value = name
+  filterStoresE(name)
+}
+
+async function saveEditTx() {
+  const amount = parseFloat(document.getElementById('eta').value)
+  if (!amount || amount <= 0) { document.getElementById('eta').focus(); return }
+  const account_id = document.getElementById('etx-ac').value
+  const to_account_id = document.getElementById('etx-toac').value
+  if (eTxT === 'transfer' && account_id === to_account_id) { toast('轉出和轉入帳戶不能相同'); return }
+  const store_name = document.getElementById('etx-store').value.trim()
+  if (store_name) saveStoreMemory(store_name)
+  const btn = document.getElementById('etx-submit')
+  btn.disabled=true; btn.textContent='儲存中...'
+  const payload = {
+    type: eTxT, amount,
+    parent_cat_id: eTxT!=='transfer' ? eSelP : null,
+    sub_cat_id: eTxT!=='transfer' && eSelS ? eSelS : null,
+    note: document.getElementById('etn').value.trim(),
+    store_name: store_name || null,
+    account_id,
+    to_account_id: eTxT==='transfer' ? to_account_id : null,
+    date: document.getElementById('etd').value,
+  }
+  try {
+    const {error} = await db.from('transactions').update(payload).eq('id', editTxId)
+    if (error) throw error
+    const idx = txs.findIndex(t => t.id === editTxId)
+    if (idx !== -1) txs[idx] = {...txs[idx], ...payload}
+    hide('m-etx'); updSum(); render(); toast('已更新')
+  } catch(err) { toast('更新失敗：' + err.message) }
+  finally { btn.disabled=false; btn.textContent='儲存變更' }
+}
+
+async function delEditTx() {
+  if (!editTxId) return
+  const {error} = await db.from('transactions').delete().eq('id', editTxId)
+  if (error) { toast('刪除失敗'); return }
+  txs = txs.filter(t => t.id !== editTxId)
+  hide('m-etx'); updSum(); render(); toast('已刪除')
+}
 
 // ── 店家記憶 ──────────────────────────────────────────────────
 function getStoreMem() {
